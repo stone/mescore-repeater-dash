@@ -1,0 +1,7 @@
+# Allowlist: only what the build needs enters the context.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+**/*_test.go

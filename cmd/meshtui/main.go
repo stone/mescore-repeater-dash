@@ -38,7 +38,16 @@ func main() {
 	webCert := flag.String("web-tls-cert", "", "serve the web dashboard over HTTPS with this certificate (PEM)")
 	webKey := flag.String("web-tls-key", "", "private key (PEM) for -web-tls-cert")
 	webConsole := flag.Bool("web-console", false, "allow running repeater commands from the web dashboard (needs -web-user/-web-pass)")
+	health := flag.String("healthcheck", "", "probe this URL and exit 0 if it answers without a 5xx (for container healthchecks)")
 	flag.Parse()
+
+	if *health != "" {
+		if err := healthcheck(*health); err != nil {
+			fmt.Fprintln(os.Stderr, "meshtui: healthcheck:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	var src repeater.Source
 	if *demo {

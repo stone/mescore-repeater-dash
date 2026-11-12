@@ -1,0 +1,75 @@
+# meshtui in Docker.
+#
+#   mkdir -p secrets && printf '%s' 'your-password' > secrets/web_pass
+#   sudo chown 65532:65532 secrets/web_pass && sudo chmod 0400 secrets/web_pass
+#   docker compose up -d                                  # web dashboard + /metrics
+#
+#   docker compose stop web && docker compose run --rm tui   # TUI (only one process can own the serial port)
+#
+# Settings (shell env or .env file):
+#   MESHTUI_IMAGE       image to run              (default meshtui:local, built from this repo)
+#   MESHTUI_DEVICE      host serial device        (default /dev/ttyUSB-heltecv3)
+#   MESHTUI_DIALOUT_GID host GID owning the device (default 20 = dialout on Debian/Ubuntu)
+#   MESHTUI_BIND        host address for ports    (default 127.0.0.1; set 0.0.0.0 or a WireGuard IP to expose)
+#   MESHTUI_WEB_USER    basic auth user           (default admin)
+
+name: meshtui
+
+x-meshtui: &meshtui
+  image: ${MESHTUI_IMAGE:-meshtui:local}
+  build:
+    context: .
+  user: "65532:65532"
+  group_add:
+    - "${MESHTUI_DIALOUT_GID:-20}"
+  devices:
+    - "${MESHTUI_DEVICE:-/dev/ttyUSB-heltecv3}:/dev/ttyUSB-heltecv3"
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  deploy:
+    resources:
+      limits:
+        cpus: "0.50"
+        memory: 128M
+        pids: 64
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  web:
+    <<: *meshtui
+    command:
+      - -web=:8080
+      - -listen=:9110
+      - -web-user=${MESHTUI_WEB_USER:-admin}
+      - -web-pass-file=/run/secrets/web_pass
+    secrets:
+      - web_pass
+    ports:
+      - "${MESHTUI_BIND:-127.0.0.1}:8080:8080"
+      - "${MESHTUI_BIND:-127.0.0.1}:9110:9110"
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+  tui:
+    <<: *meshtui
+    profiles: ["tui"]
+    command: ["-dev", "/dev/ttyUSB-heltecv3"]
+    stdin_open: true
+    tty: true
+    environment:
+      TERM: xterm-256color
+      COLORTERM: truecolor
+    healthcheck:
+      disable: true
+    restart: "no"
+
+secrets:
+  web_pass:
+    file: ./secrets/web_pass
