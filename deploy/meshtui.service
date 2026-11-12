@@ -1,0 +1,16 @@
+# Headless Prometheus exporter for the MeshCore repeater.
+# Install: sudo cp deploy/meshtui.service /etc/systemd/system/ && sudo systemctl enable --now meshtui
+# Note: only one program can hold the serial port. Stop this service before running the TUI,
+# or skip the service and run the TUI with -listen :9110 instead.
+[Unit]
+Description=meshtui MeshCore repeater exporter
+After=network-online.target dev-ttyUSB\x2dheltecv3.device
+
+[Service]
+User=stone
+ExecStart=/home/stone/meshtui -headless -listen :9110 -dev /dev/ttyUSB-heltecv3
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

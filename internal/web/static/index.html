@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en" data-theme="synthwave">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>meshtui</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 10v20M10 30l6-14 6 14' stroke='%23ff6ad5' stroke-width='2.5' fill='none'/%3E%3Ccircle cx='16' cy='8' r='3' fill='%238be9fd'/%3E%3Cpath d='M8 3a12 12 0 0 0 0 10M24 3a12 12 0 0 1 0 10' stroke='%238be9fd' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="status" id="statusPill"><span class="dot"></span><span id="status">CONNECTING</span></div>
+  <h1 id="name" class="grad">meshtui</h1>
+  <div class="chips">
+    <span class="chip" id="fw" hidden></span>
+    <span class="chip accent" id="radio" hidden></span>
+    <span class="chip">up <b id="uptime">–</b></span>
+    <span class="chip"><span class="batt" aria-hidden="true"><i id="battFill"></i></span><b id="battV">–</b></span>
+    <span class="chip mono" id="clock"></span>
+  </div>
+  <div class="actions">
+    <button id="themeBtn" type="button" title="Change theme (t)">◐ <span id="themeName"></span></button>
+    <button id="helpBtn" type="button" title="What am I looking at? (h)">?</button>
+  </div>
+</header>
+
+<div id="banner" class="banner" hidden role="alert">ϟ NO SIGNAL — <span id="bannerText"></span></div>
+
+<main class="grid">
+  <section class="card radio" data-help="radio">
+    <h2>Radio <button class="info" type="button" aria-label="About this panel">i</button></h2>
+    <p class="help" hidden></p>
+    <svg id="antenna" viewBox="0 0 200 140" role="img" aria-label="Antenna: waves in for received packets, out for transmitted">
+      <g id="rings"></g>
+      <g class="mast">
+        <line x1="100" y1="40" x2="100" y2="136"/>
+        <line x1="100" y1="52" x2="76" y2="136"/>
+        <line x1="100" y1="52" x2="124" y2="136"/>
+        <line x1="90" y1="86" x2="110" y2="86"/>
+        <line x1="83" y1="112" x2="117" y2="112"/>
+      </g>
+      <circle id="tip" cx="100" cy="34" r="6"/>
+    </svg>
+    <div class="counters">
+      <span class="rx">⇣ rx <b id="rxTotal">0</b></span>
+      <span class="tx">⇡ tx <b id="txTotal">0</b></span>
+    </div>
+    <div class="sub" id="lastPkt">waiting for data…</div>
+  </section>
+
+  <section class="card signal" data-help="noise-rssi">
+    <h2>Noise · RSSI <small id="sigNow"></small><button class="info" type="button" aria-label="About this panel">i</button></h2>
+    <p class="help" hidden></p>
+    <div class="legend"><span class="sw rssi"></span>RSSI last packet <span class="sw noise"></span>Noise floor</div>
+    <div class="plot"><canvas id="sigChart" aria-label="Noise floor and RSSI over time"></canvas></div>
+  </section>
+
+  <section class="card snr" data-help="snr">
+    <h2>SNR <small id="snrNow"></small><button class="info" type="button" aria-label="About this panel">i</button></h2>
+    <p class="help" hidden></p>
+    <div class="plot"><canvas id="snrChart" aria-label="SNR of received packets"></canvas></div>
+  </section>
+
+  <section class="card packets" data-help="packets-min">
+    <h2>Packets / min <small id="pktNow"></small><button class="info" type="button" aria-label="About this panel">i</button></h2>
+    <p class="help" hidden></p>
+    <div class="legend"><span class="sw rx"></span>received ▲ <span class="sw tx"></span>transmitted / relayed ▼</div>
+    <div class="plot short"><canvas id="pktChart" aria-label="Packets per minute, received up, transmitted down"></canvas></div>
+  </section>
+
+  <section class="card stats" data-help="stats">
+    <h2>Stats <button class="info" type="button" aria-label="About this panel">i</button></h2>
+    <p class="help" hidden></p>
+    <dl>
+      <dt>Duty</dt><dd><div class="gauge" title="TX duty cycle over 10 min, scale 0–10% (EU limit)"><i id="dutyMask"></i></div><b id="duty">warming up…</b></dd>
+      <dt>Airtime</dt><dd><span class="tx">⇡ <b id="airTx">–</b></span> <span class="rx">⇣ <b id="airRx">–</b></span></dd>
+      <dt>Flood</dt><dd><span class="rx">⇣ <b id="floodRx">–</b></span> <span class="tx">⇡ <b id="floodTx">–</b></span></dd>
+      <dt>Direct</dt><dd><span class="rx">⇣ <b id="directRx">–</b></span> <span class="tx">⇡ <b id="directTx">–</b></span></dd>
+      <dt>Errors</dt><dd><b id="errs">–</b> <span class="muted">queue</span> <b id="queue">–</b></dd>
+      <dt>Battery</dt><dd><b id="battV2">–</b><canvas id="battSpark" class="spark" aria-label="Battery voltage history"></canvas></dd>
+    </dl>
+  </section>
+
+  <section class="card neighbors" data-help="neighbors">
+    <h2>Neighbors <small id="nbCount"></small><button class="info" type="button" aria-label="About this panel">i</button></h2>
+    <p class="help" hidden></p>
+    <table>
+      <thead><tr><th>ID</th><th>SNR</th><th>heard</th></tr></thead>
+      <tbody id="nbBody"><tr><td colspan="3" class="muted">none heard yet — keep listening</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="card feed" data-help="live-feed">
+    <h2>Live feed <button class="info" type="button" aria-label="About this panel">i</button></h2>
+    <p class="help" hidden></p>
+    <ol id="feed" aria-live="polite"><li class="muted">listening for packets…</li></ol>
+  </section>
+
+  <section class="card console" id="consoleCard" hidden>
+    <h2>Repeater console <small>read-only commands run at once · anything else asks first</small></h2>
+    <div id="consoleOut" class="mono"></div>
+    <form id="consoleForm" autocomplete="off">
+      <span class="prompt">❯</span>
+      <input id="cmd" list="cmds" placeholder="repeater command, e.g. get tx" spellcheck="false" aria-label="Repeater command">
+      <button type="submit">Send</button>
+    </form>
+    <datalist id="cmds"></datalist>
+  </section>
+</main>
+
+<footer>
+  <span><kbd>h</kbd> help · <kbd>t</kbd> theme<span id="consoleKey" hidden> · <kbd>:</kbd> console</span></span>
+  <span id="updated" class="muted"></span>
+</footer>
+
+<div id="tip-box" class="tooltip" hidden></div>
+
+<dialog id="helpDlg">
+  <h2>What am I looking at?</h2>
+  <div id="helpBody"></div>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
+
+<dialog id="confirmDlg">
+  <p class="warn">⚠ <b id="confirmCmd"></b> can change the repeater.</p>
+  <p>Send it?</p>
+  <form method="dialog" class="row">
+    <button value="no" autofocus>Cancel</button>
+    <button value="yes" class="danger">Send it</button>
+  </form>
+</dialog>
+</body>
+</html>
